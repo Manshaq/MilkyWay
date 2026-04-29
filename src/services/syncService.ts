@@ -1,53 +1,7 @@
-import { collection, doc, setDoc, getDocs, onSnapshot, Timestamp } from 'firebase/firestore';
-import { db as firestore, auth } from '../lib/firebase.ts';
+import { collection, doc, setDoc, getDocs, onSnapshot } from 'firebase/firestore';
+import { db as firestore } from '../lib/firebase.ts';
 import { db as local } from '../db.ts';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
+import { OperationType, handleFirestoreError } from '../lib/firestore-helpers.ts';
 
 export class CloudSyncService {
   private static liveUnsubscribers: (() => void)[] = [];
@@ -59,7 +13,7 @@ export class CloudSyncService {
     
     // Listen to Suppliers
     const unsubSuppliers = onSnapshot(collection(firestore, 'suppliers'), async (snapshot) => {
-      snapshot.docChanges().forEach(async (change) => {
+      await Promise.all(snapshot.docChanges().map(async (change) => {
         const d = change.doc;
         const data = d.data();
         
@@ -84,14 +38,14 @@ export class CloudSyncService {
         } else if (change.type === 'removed') {
            await local.suppliers.delete(d.id);
         }
-      });
+      }));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'suppliers');
     });
 
     // Listen to Milk Records
     const unsubMilk = onSnapshot(collection(firestore, 'milkRecords'), async (snapshot) => {
-      snapshot.docChanges().forEach(async (change) => {
+      await Promise.all(snapshot.docChanges().map(async (change) => {
         const d = change.doc;
         const data = d.data();
         if (change.type === 'added' || change.type === 'modified') {
@@ -112,14 +66,14 @@ export class CloudSyncService {
         } else if (change.type === 'removed') {
            await local.milkRecords.delete(d.id);
         }
-      });
+      }));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'milkRecords');
     });
 
     // Listen to Transactions
     const unsubTx = onSnapshot(collection(firestore, 'transactions'), async (snapshot) => {
-      snapshot.docChanges().forEach(async (change) => {
+      await Promise.all(snapshot.docChanges().map(async (change) => {
         const d = change.doc;
         const data = d.data();
         if (change.type === 'added' || change.type === 'modified') {
@@ -137,7 +91,7 @@ export class CloudSyncService {
         } else if (change.type === 'removed') {
            await local.transactions.delete(d.id);
         }
-      });
+      }));
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'transactions');
     });
@@ -188,7 +142,6 @@ export class CloudSyncService {
       }
     } catch (e) {
       console.error('Failed to pull server data:', e);
-      handleFirestoreError(e, OperationType.GET, 'suppliers');
     }
   }
 

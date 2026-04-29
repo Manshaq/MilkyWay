@@ -259,7 +259,7 @@ function AddSupplierModal({ onClose }: { onClose: () => void }) {
         updatedAt: Date.now(),
         joinDate: Date.now()
       });
-      CloudSyncService.syncAll();
+      await CloudSyncService.syncAll().catch(err => console.error('Sync failed:', err));
       onClose();
     } catch (e) {
       console.error(e);

@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './store/authStore.ts';
 import { CloudSyncService } from './services/syncService.ts';
 
-import { Sparkles, Milk } from 'lucide-react';
+import { Milk } from 'lucide-react';
 
 // Pages
 import Dashboard from './components/dashboard/Dashboard.tsx';
