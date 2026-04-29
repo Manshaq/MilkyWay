@@ -24,9 +24,9 @@ jobs:
       - name: Build the web app
         run: npm run build
 
-      - name: Upload to Capgo
-        uses: capgo/capgo-action@v2
-        with:
-          token: ${{ secrets.CAPGO_TOKEN }}
-          app_id: "com.neophytehub.milkyway"
-          channel: "production"
+           - name: Upload to Capgo
+        run: |
+          npm install -g @capgo/cli
+          npx @capgo/cli bundle upload --channel production
+        env:
+          CAPGO_TOKEN: ${{ secrets.CAPGO_TOKEN }}
