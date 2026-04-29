@@ -1,0 +1,99 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "name", "email", "password", "role", "createdAt"]
+    },
+    "Supplier": {
+      "title": "Supplier",
+      "description": "Supplier profiles managed by agents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "location": { "type": "string" },
+        "bankName": { "type": "string" },
+        "accountNumber": { "type": "string" },
+        "walletBalance": { "type": "number" },
+        "updatedAt": { "type": "object" }
+      },
+      "required": ["id", "name", "phone", "location", "bankName", "accountNumber", "updatedAt"]
+    },
+    "MilkRecord": {
+      "title": "MilkRecord",
+      "description": "Immutable milk records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "supplierName": { "type": "string" },
+        "liters": { "type": "number" },
+        "amount": { "type": "number" },
+        "timestamp": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "supplierId", "supplierName", "liters", "amount", "timestamp", "updatedAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Financial ledger transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "supplierId": { "type": "string" },
+        "amount": { "type": "number" },
+        "balanceBefore": { "type": "number" },
+        "balanceAfter": { "type": "number" },
+        "timestamp": { "type": "number" },
+        "reference": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "type", "amount", "balanceBefore", "balanceAfter", "timestamp", "reference", "status"]
+    },
+    "System": {
+      "title": "System",
+      "description": "Company balance ledger",
+      "type": "object",
+      "properties": {
+        "balance": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["balance", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Admin and Agent Users (Read-only by client, writes by admin-sdk)"
+    },
+    "/suppliers/{supplierId}": {
+      "schema": { "$ref": "#/entities/Supplier" },
+      "description": "Suppliers. Agents can create and update (except walletBalance)."
+    },
+    "/milkRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/MilkRecord" },
+      "description": "Milk Records (Read-only by client)"
+    },
+    "/transactions/{txId}": {
+      "schema": { "$ref": "#/entities/Transaction" },
+      "description": "Ledger Transactions (Read-only by client)"
+    },
+    "/system/{systemId}": {
+      "schema": { "$ref": "#/entities/System" },
+      "description": "System Ledger (Read-only by client)"
+    }
+  }
+}

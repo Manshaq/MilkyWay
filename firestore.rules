@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isSignedIn() { return request.auth != null; }
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasActiveRole() {
+      let data = getUserData();
+      return data.status == 'ACTIVE' && (data.role == 'AGENT' || data.role == 'ADMIN');
+    }
+
+    function isActiveAgent() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && hasActiveRole();
+    }
+    function isAdmin() { 
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData().role == 'ADMIN'; 
+    }
+    
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // Users
+    match /users/{userId} {
+      // Users are managed by the server (admin-sdk) during login/registration.
+      // Allow user to read their own profile.
+      allow read: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Suppliers
+    match /suppliers/{supplierId} {
+      allow read: if isActiveAgent();
+      
+      // Agents can create suppliers locally and push. walletBalance must be 0
+      allow create: if isActiveAgent() 
+        && isValidId(supplierId)
+        && isValidSupplier(incoming())
+        && incoming().walletBalance == 0;
+        
+      // Agents can update non-financial details of suppliers.
+      allow update: if isActiveAgent() 
+        && isValidId(supplierId)
+        && isValidSupplier(incoming())
+        && !incoming().diff(existing()).affectedKeys().hasAny(['walletBalance']);
+        
+      function isValidSupplier(data) {
+        return data.keys().hasAll(['id', 'name', 'phone', 'location', 'bankName', 'accountNumber', 'walletBalance', 'synced', 'updatedAt', 'joinDate'])
+               && data.size() == 10
+               && data.id is string && data.id.size() <= 128
+               && data.name is string && data.name.size() <= 100
+               && data.phone is string && data.phone.size() <= 50
+               && data.location is string && data.location.size() <= 200
+               && data.bankName is string && data.bankName.size() <= 100
+               && data.accountNumber is string && data.accountNumber.size() <= 50
+               && data.walletBalance is number
+               && data.synced is bool
+               && data.updatedAt is number
+               && data.joinDate is number;
+      }
+    }
+
+    // Milk Records
+    match /milkRecords/{recordId} {
+      // Only server creates milk records and performs wallet updates
+      allow read: if isActiveAgent();
+    }
+
+    // Transactions
+    match /transactions/{txId} {
+      // Only server creates transactions for ledger
+      allow read: if isActiveAgent();
+    }
+    
+    // System (Company Balance)
+    match /system/{documentId} {
+      // Only server modifies system balance
+      allow read: if isActiveAgent();
+    }
+  }
+}
