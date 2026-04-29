@@ -63,7 +63,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || '';
 
 const app = express();
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const _port = parseInt(process.env.PORT || '3000', 10);
+if (isNaN(_port) || _port < 1 || _port > 65535) {
+  throw new Error(`Invalid PORT value: ${process.env.PORT}`);
+}
+const PORT = _port;
 
 app.set('trust proxy', 1);
 
@@ -338,7 +342,7 @@ app.post('/api/wallet/withdraw/bank', authenticate, async (req, res) => {
         id: transactionId,
         type: 'WITHDRAWAL_BANK',
         supplierId,
-        agentId: req.user!.id, // Audit trail
+        agentId: req.user?.id, // Audit trail
         amount,
         balanceBefore: supplierBalance,
         balanceAfter: newWalletBalance,

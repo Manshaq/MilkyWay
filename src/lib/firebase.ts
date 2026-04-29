@@ -7,7 +7,7 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(
   app,
-  (import.meta as any).env?.VITE_FIREBASE_DB_ID || firebaseConfig.firestoreDatabaseId
+  import.meta.env.VITE_FIREBASE_DB_ID || firebaseConfig.firestoreDatabaseId
 );
 
 export default app;
