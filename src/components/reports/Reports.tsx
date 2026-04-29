@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Download, Calendar as CalendarIcon, Droplet, CreditCard, Users, Filter, FileText } from 'lucide-react';
 import { db } from '../../db.ts';
@@ -15,27 +15,35 @@ export default function Reports() {
   );
   const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
-  // Compute actual date bounds
-  let computedStart = new Date(startDate).getTime();
-  let computedEnd = new Date(endDate).getTime() + 86400000 - 1; // End of day
-
-  if (preset === 'TODAY') {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    computedStart = today.getTime();
-    computedEnd = computedStart + 86400000 - 1;
-  } else if (preset === 'LAST_7_DAYS') {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    computedStart = today.getTime() - 6 * 86400000;
-    computedEnd = today.getTime() + 86400000 - 1;
-  } else if (preset === 'THIS_MONTH') {
-    const today = new Date();
-    computedStart = new Date(today.getFullYear(), today.getMonth(), 1).getTime();
-    computedEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
-  } else if (preset === 'CUSTOM') {
-    // Uses the raw startDate and endDate states
-  }
+  // Compute actual date bounds (memoized to avoid redundant re-queries)
+  const { computedStart, computedEnd } = useMemo(() => {
+    if (preset === 'TODAY') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const start = today.getTime();
+      return { computedStart: start, computedEnd: start + 86400000 - 1 };
+    }
+    if (preset === 'LAST_7_DAYS') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return {
+        computedStart: today.getTime() - 6 * 86400000,
+        computedEnd: today.getTime() + 86400000 - 1,
+      };
+    }
+    if (preset === 'THIS_MONTH') {
+      const today = new Date();
+      return {
+        computedStart: new Date(today.getFullYear(), today.getMonth(), 1).getTime(),
+        computedEnd: new Date(today.getFullYear(), today.getMonth() + 1, 0, 23, 59, 59, 999).getTime(),
+      };
+    }
+    // CUSTOM: uses the raw startDate and endDate states
+    return {
+      computedStart: new Date(startDate).getTime(),
+      computedEnd: new Date(endDate).getTime() + 86400000 - 1,
+    };
+  }, [preset, startDate, endDate]);
 
   // Fetch data
   const suppliers = useLiveQuery(() => db.suppliers.toArray()) || [];
@@ -58,6 +66,14 @@ export default function Reports() {
   
   const totalBalances = suppliers.reduce((sum, s) => sum + s.walletBalance, 0);
 
+  const escapeCSV = (value: string | number): string => {
+    const str = String(value);
+    if (str.includes(',') || str.includes('\n') || str.includes('"') || /^[=+\-@]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+
   const downloadCSV = () => {
     // Generate CSV content
     let csvContent = "data:text/csv;charset=utf-8,";
@@ -76,7 +92,7 @@ export default function Reports() {
     csvContent += "MILK COLLECTIONS\n";
     csvContent += "Date,Supplier Name,Volume (L),Price/L,Total Amount\n";
     records.forEach(r => {
-      csvContent += `${new Date(r.timestamp).toLocaleString()},${r.supplierName},${r.liters},${r.pricePerLiter},${r.totalAmount}\n`;
+      csvContent += `${escapeCSV(new Date(r.timestamp).toLocaleString())},${escapeCSV(r.supplierName)},${escapeCSV(r.liters)},${escapeCSV(r.pricePerLiter)},${escapeCSV(r.totalAmount)}\n`;
     });
     csvContent += "\n";
 
@@ -84,7 +100,7 @@ export default function Reports() {
     csvContent += "ALL MONETARY TRANSACTIONS\n";
     csvContent += "Date,Type,Description/Agent,Amount\n";
     transactions.forEach(t => {
-      csvContent += `${new Date(t.timestamp).toLocaleString()},${t.type},${t.supplierName || 'Company'},${t.amount}\n`;
+      csvContent += `${escapeCSV(new Date(t.timestamp).toLocaleString())},${escapeCSV(t.type)},${escapeCSV(t.supplierName || 'Company')},${escapeCSV(t.amount)}\n`;
     });
 
     const encodedUri = encodeURI(csvContent);

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { usePaystackPayment } from 'react-paystack';
 import { db } from '../../db.ts';
-import { db as firestore, auth } from '../../lib/firebase.ts';
+import { db as firestore } from '../../lib/firebase.ts';
+import { OperationType, handleFirestoreError } from '../../lib/firestore-helpers.ts';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { formatCurrency } from '../../lib/utils.ts';
+import { cn, formatCurrency } from '../../lib/utils.ts';
 import { CloudSyncService } from '../../services/syncService.ts';
 import api from '../../lib/api.ts';
 import { useAuthStore } from '../../store/authStore.ts';
@@ -28,53 +29,6 @@ import {
   CreditCard,
   Loader2
 } from 'lucide-react';
-
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId?: string | null;
-    email?: string | null;
-    emailVerified?: boolean | null;
-    isAnonymous?: boolean | null;
-    tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
 
 function StatCard({ label, value, icon, trend }: { label: string, value: string, icon: React.ReactNode, trend?: string }) {
   return (
@@ -105,8 +59,10 @@ function FundCompanyModal({ onClose, onSuccess }: { onClose: () => void, onSucce
   
   const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY;
 
+  const [reference, setReference] = useState(() => `FUND-${Date.now()}`);
+
   const config = {
-    reference: `FUND-${new Date().getTime()}`,
+    reference,
     email: customUser?.email || "admin@milkyway.com",
     amount: parseFloat(amount) * 100, // Paystack requires kobo/cents
     publicKey: publicKey || 'pk_test_placeholder', 
@@ -114,14 +70,16 @@ function FundCompanyModal({ onClose, onSuccess }: { onClose: () => void, onSucce
   
   const initializePayment = usePaystackPayment(config);
 
-  const handlePaystackSuccessAction = async (reference: any) => {
+  const handlePaystackSuccessAction = async (ref: any) => {
     try {
-      await api.post('/api/payments/verify-paystack', { reference: reference.reference });
+      await api.post('/api/payments/verify-paystack', { reference: ref.reference });
+      setReference(`FUND-${Date.now()}`); // Fresh reference for any future payment
       onSuccess();
       onClose();
     } catch (e) {
+      setReference(`FUND-${Date.now()}`); // Fresh reference so retries work
       console.error(e);
-      alert(e && typeof e === 'object' && 'response' in e ? (e as any).response?.data?.error || `Payment failed to verify on server. Provide support reference: ${reference.reference}` : `Payment failed to verify on server. Provide support reference: ${reference.reference}`);
+      alert(e && typeof e === 'object' && 'response' in e ? (e as any).response?.data?.error || `Payment failed to verify on server. Provide support reference: ${ref.reference}` : `Payment failed to verify on server. Provide support reference: ${ref.reference}`);
     }
   };
 
@@ -207,11 +165,23 @@ export default function Dashboard() {
     return () => unsub();
   }, []);
 
-  const fetchBalance = async () => {
-     // Kept for manual refresh if needed, but the live snapshot takes over
-  };
+  const thisMonthBounds = useMemo(() => {
+    const now = new Date();
+    return {
+      start: new Date(now.getFullYear(), now.getMonth(), 1).getTime(),
+      end: new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime(),
+    };
+  }, []);
 
-  const totalMonthlyMilk = (useLiveQuery(() => db.milkRecords.toArray()) || []).reduce((acc, curr) => acc + curr.liters, 0);
+  const totalMonthlyMilk = useLiveQuery(
+    () =>
+      db.milkRecords
+        .where('timestamp')
+        .between(thisMonthBounds.start, thisMonthBounds.end)
+        .toArray()
+        .then(rs => rs.reduce((acc, r) => acc + r.liters, 0)),
+    [thisMonthBounds]
+  ) ?? 0;
 
   const handleSync = async () => {
     setSyncing(true);
@@ -311,13 +281,10 @@ export default function Dashboard() {
       {showFundModal && (
         <FundCompanyModal 
           onClose={() => setShowFundModal(false)}
-          onSuccess={() => fetchBalance()}
+          onSuccess={() => {}}
         />
       )}
     </div>
   );
 }
 
-function cn(...inputs: any[]) {
-  return inputs.filter(Boolean).join(' ');
-}

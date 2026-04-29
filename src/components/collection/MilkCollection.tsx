@@ -55,7 +55,7 @@ export default function MilkCollection() {
         pricePerLiter: parseFloat(price),
         totalAmount,
         amountPaid: 0,
-        status: 'PENDING',
+        status: 'PAID',
         timestamp: Date.now(),
         paymentDueDate: Date.now() + (7 * 24 * 60 * 60 * 1000),
         synced: false,
@@ -85,8 +85,12 @@ export default function MilkCollection() {
       });
 
       setLiters('');
-      CloudSyncService.syncAll();
-      setMessage({ type: 'success', text: `Success: ${liters}L recorded for ${supplier.name}` });
+      try {
+        await CloudSyncService.syncAll();
+        setMessage({ type: 'success', text: `Recorded and synced: ${liters}L for ${supplier.name}` });
+      } catch {
+        setMessage({ type: 'success', text: `Saved locally (sync pending): ${liters}L for ${supplier.name}` });
+      }
     } catch (err) {
       setMessage({ type: 'error', text: `Error: ${(err as Error).message}` });
     } finally {
