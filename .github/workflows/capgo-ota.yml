@@ -1,0 +1,32 @@
+name: Deploy OTA Update to Capgo
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Upload to Capgo
+        uses: capgo/capgo-action@v2
+        with:
+          token: ${{ secrets.CAPGO_TOKEN }}
+          app_id: "com.milkyway.app"
+          channel: "production"
