@@ -28,5 +28,5 @@ jobs:
         uses: capgo/capgo-action@v2
         with:
           token: ${{ secrets.CAPGO_TOKEN }}
-          app_id: "com.milkyway.app"
+          app_id: "com.neophytehub.milkyway"
           channel: "production"
